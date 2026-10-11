@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import config from "./config.js";
 import logger from "./lib/logger.js";
 import { requireAuth } from "./auth.js";
+import categoriesRouter from "./routes/categories.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,8 +90,10 @@ app.get("/api/me", (req, res) => {
   });
 });
 
-/* More routes come in later phases:
+/* ---------- Feature routes ---------- */
 app.use("/api/categories", categoriesRouter);
+
+/* More routes come in later phases:
 app.use("/api/friends", friendsRouter);
 app.use("/api/transactions", transactionsRouter);
 */

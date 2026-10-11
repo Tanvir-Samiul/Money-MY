@@ -8,6 +8,7 @@ import Transactions from "./pages/Transactions.jsx";
 import Add from "./pages/Add.jsx";
 import Friends from "./pages/Friends.jsx";
 import More from "./pages/More.jsx";
+import Categories from "./pages/Categories.jsx";
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="add" element={<Add />} />
         <Route path="friends" element={<Friends />} />
         <Route path="more" element={<More />} />
+        <Route path="categories" element={<Categories />} />
       </Route>
     </Routes>
   );
