@@ -16,7 +16,7 @@ app.use(
   helmet({
     // Allow the app to talk to Supabase, Gemini, etc.
     contentSecurityPolicy: false,
-  })
+  }),
 );
 
 /* ---------- Request logging ---------- */
@@ -26,7 +26,36 @@ app.use(
     autoLogging: {
       ignore: (req) => req.url === "/healthz",
     },
-  })
+    // Never log sensitive values. Anything listed here is replaced with
+    // "[Redacted]" in the output.
+    redact: {
+      paths: [
+        "req.headers.authorization",
+        "req.headers.cookie",
+        "req.headers['set-cookie']",
+        "res.headers['set-cookie']",
+      ],
+      censor: "[Redacted]",
+    },
+    // Keep the log line short — no full header dump in production
+    serializers: {
+      req(req) {
+        return {
+          id: req.id,
+          method: req.method,
+          url: req.url,
+          query: req.query,
+          params: req.params,
+          remoteAddress: req.remoteAddress,
+        };
+      },
+      res(res) {
+        return {
+          statusCode: res.statusCode,
+        };
+      },
+    },
+  }),
 );
 
 /* ---------- Body parsing ---------- */
@@ -70,7 +99,7 @@ app.use((err, req, res, _next) => {
 /* ---------- Start ---------- */
 const server = app.listen(config.PORT, () => {
   logger.info(
-    `🚀 Server listening on http://localhost:${config.PORT} (env: ${config.NODE_ENV})`
+    `🚀 Server listening on http://localhost:${config.PORT} (env: ${config.NODE_ENV})`,
   );
 });
 
