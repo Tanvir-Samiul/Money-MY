@@ -17,7 +17,9 @@ export default function SignUp() {
     setLoading(true);
     try {
       await signUp(email.trim(), password);
-      setMessage("Account created. Check your email if confirmation is required.");
+      setMessage(
+        "Account created. Check your email if confirmation is required.",
+      );
       setTimeout(() => navigate("/login"), 1500);
     } catch (err) {
       setError(err.message || "Sign up failed");
@@ -29,14 +31,17 @@ export default function SignUp() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-bg">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-center text-text">Create account</h1>
-        <p className="text-sm text-text-muted text-center mt-1">
-          Calm Ledger
-        </p>
+        <h1 className="text-2xl font-bold text-center text-text">
+          Create account
+        </h1>
+        <p className="text-sm text-text-muted text-center mt-1">Money MY</p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-text mb-1">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-text mb-1"
+            >
               Email
             </label>
             <input
@@ -51,7 +56,10 @@ export default function SignUp() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-text mb-1">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-text mb-1"
+            >
               Password
             </label>
             <input
@@ -64,7 +72,9 @@ export default function SignUp() {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-text outline-none focus:border-primary"
             />
-            <p className="mt-1 text-[11px] text-text-muted">At least 6 characters.</p>
+            <p className="mt-1 text-[11px] text-text-muted">
+              At least 6 characters.
+            </p>
           </div>
 
           {error && (

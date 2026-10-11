@@ -1,4 +1,4 @@
-﻿# Calm Ledger
+﻿# Money MY
 
 A calm, mobile-first personal expense tracker for Malaysian Ringgit spending.
 

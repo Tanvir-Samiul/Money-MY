@@ -28,14 +28,17 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-bg">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-center text-text">Calm Ledger</h1>
+        <h1 className="text-2xl font-bold text-center text-text">Money My</h1>
         <p className="text-sm text-text-muted text-center mt-1">
           Sign in to your account
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-text mb-1">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-text mb-1"
+            >
               Email
             </label>
             <input
@@ -50,7 +53,10 @@ export default function Login() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-text mb-1">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-text mb-1"
+            >
               Password
             </label>
             <input
