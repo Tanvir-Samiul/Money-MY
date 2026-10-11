@@ -63,3 +63,25 @@ export const categoriesApi = {
     return apiFetch(`/api/categories/${id}${qs}`, { method: "DELETE" });
   },
 };
+
+/* ---------- Transactions ---------- */
+export const transactionsApi = {
+  list: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v != null && v !== ""),
+    ).toString();
+    return apiFetch(`/api/transactions${qs ? `?${qs}` : ""}`);
+  },
+  get: (id) => apiFetch(`/api/transactions/${id}`),
+  createManual: (data) =>
+    apiFetch("/api/transactions/manual", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (id, data) =>
+    apiFetch(`/api/transactions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  delete: (id) => apiFetch(`/api/transactions/${id}`, { method: "DELETE" }),
+};

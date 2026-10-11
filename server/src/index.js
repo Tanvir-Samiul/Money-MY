@@ -9,6 +9,7 @@ import config from "./config.js";
 import logger from "./lib/logger.js";
 import { requireAuth } from "./auth.js";
 import categoriesRouter from "./routes/categories.js";
+import transactionsRouter from "./routes/transactions.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -92,11 +93,10 @@ app.get("/api/me", (req, res) => {
 
 /* ---------- Feature routes ---------- */
 app.use("/api/categories", categoriesRouter);
-
+app.use("/api/transactions", transactionsRouter);
 /* More routes come in later phases:
 app.use("/api/friends", friendsRouter);
-app.use("/api/transactions", transactionsRouter);
-*/
+ 
 
 /* ---------- Serve client build in production ---------- */
 if (config.NODE_ENV === "production") {
