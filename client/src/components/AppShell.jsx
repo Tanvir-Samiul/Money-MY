@@ -12,7 +12,7 @@ export default function AppShell() {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      <div className="mx-auto max-w-[480px] min-h-screen flex flex-col">
+      <div className="mx-auto w-full max-w-[480px] min-h-screen flex flex-col">
         <header className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h1 className="text-sm font-bold">Calm Ledger</h1>
           <button
