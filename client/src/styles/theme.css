@@ -1,0 +1,57 @@
+﻿:root {
+  --bg: #f6f8f7;
+  --surface: #ffffff;
+  --border: #e2e8e5;
+  --text: #14211d;
+  --text-muted: #5e6f69;
+  --primary: #0f766e;
+  --primary-soft: #ccebe6;
+  --on-primary: #ffffff;
+
+  --amber: #f59e0b;
+  --blue: #2563eb;
+  --green: #16a34a;
+  --red: #dc2626;
+}
+
+html.dark {
+  --bg: #0e1513;
+  --surface: #17211e;
+  --border: #26332f;
+  --text: #e8f0ed;
+  --text-muted: #9aaaa4;
+  --primary: #2dd4bf;
+  --primary-soft: #134e48;
+  --on-primary: #06201c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 16px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
