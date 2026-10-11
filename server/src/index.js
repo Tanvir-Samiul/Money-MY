@@ -1,10 +1,13 @@
-﻿import express from "express";
+﻿import "dotenv/config";
+import express from "express";
 import helmet from "helmet";
+import cors from "cors";
 import pinoHttp from "pino-http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import config from "./config.js";
 import logger from "./lib/logger.js";
+import { requireAuth } from "./auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,8 +17,15 @@ const app = express();
 /* ---------- Security headers ---------- */
 app.use(
   helmet({
-    // Allow the app to talk to Supabase, Gemini, etc.
     contentSecurityPolicy: false,
+  }),
+);
+
+/* ---------- CORS — allow the client during development ---------- */
+app.use(
+  cors({
+    origin: config.APP_ORIGIN, // http://localhost:5173
+    credentials: true,
   }),
 );
 
@@ -67,10 +77,23 @@ app.get("/healthz", (_req, res) => {
   res.json({ ok: true, env: config.NODE_ENV, ts: new Date().toISOString() });
 });
 
-/* ---------- API routes (added in later phases) ---------- */
-// app.use("/api/categories", categoriesRouter);
-// app.use("/api/friends", friendsRouter);
-// app.use("/api/transactions", transactionsRouter);
+/* ---------- API routes (all protected) ---------- */
+app.use("/api", requireAuth);
+
+/* ---------- /api/me — protected test route ---------- */
+app.get("/api/me", (req, res) => {
+  res.json({
+    id: req.user.id,
+    email: req.user.email,
+    createdAt: req.user.created_at,
+  });
+});
+
+/* More routes come in later phases:
+app.use("/api/categories", categoriesRouter);
+app.use("/api/friends", friendsRouter);
+app.use("/api/transactions", transactionsRouter);
+*/
 
 /* ---------- Serve client build in production ---------- */
 if (config.NODE_ENV === "production") {
