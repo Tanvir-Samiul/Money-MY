@@ -19,9 +19,9 @@ const schema = z.object({
   SUPABASE_RECEIPTS_BUCKET: z.string().default("receipts"),
 
   // Extraction (added in Phase 2)
-  GEMINI_API_KEY: z.string().optional(),
-  GEMINI_VISION_MODEL: z.string().default("gemini-2.0-flash"),
-  EXTRACTION_ENGINES: z.string().default("gemini"),
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_VISION_MODEL: z.string().default("qwen/qwen3.8-27b"),
+  EXTRACTION_ENGINES: z.string().default("groq"),
   EXTRACTION_MIN_GAP_MS: z.coerce.number().int().positive().default(2500),
   EXTRACTION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(4),
 
