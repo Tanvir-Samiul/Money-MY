@@ -66,8 +66,9 @@ async function main() {
   console.log(`✅ Signed URL:\n   ${signedUrl}\n`);
   console.log("👉 Open that URL in your browser to confirm the image loads.\n");
 
-  console.log("⏭️  Skipping delete so the signed URL stays valid.\n");
-  // await deleteReceipt(storagePath);
+  console.log("🗑️  Deleting...");
+  await deleteReceipt(storagePath);
+  console.log("✅ Deleted.\n");
 
   console.log("🎉 Storage pipeline works end to end.\n");
 }

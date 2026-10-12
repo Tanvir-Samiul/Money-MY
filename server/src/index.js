@@ -12,6 +12,7 @@ import categoriesRouter from "./routes/categories.js";
 import transactionsRouter from "./routes/transactions.js";
 import dashboardRouter from "./routes/dashboard.js";
 import exportRouter from "./routes/export.js";
+import receiptsRouter from "./routes/receipts.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -96,15 +97,13 @@ app.get("/api/me", (req, res) => {
 /* ---------- Feature routes ---------- */
 app.use("/api/categories", categoriesRouter);
 app.use("/api/transactions", transactionsRouter);
+app.use("/api/transactions/receipt", receiptsRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/export.csv", exportRouter);
 
 /* More routes come in later phases:
 app.use("/api/friends", friendsRouter);
-app.use("/api/transactions/receipt", receiptsRouter);
 */
-
-/* ---------- Serve client build in production ---------- */
 
 /* ---------- Serve client build in production ---------- */
 if (config.NODE_ENV === "production") {
