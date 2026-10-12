@@ -2,7 +2,8 @@
 import logger from "../lib/logger.js";
 import { serviceClient } from "./storage.js";
 import { extractReceipt } from "./extraction/index.js";
-import { deleteReceipt, signReceiptUrl } from "./files.js";
+import { prepareImage } from "./images.js";
+import { pdfToPng } from "./pdf.js";
 
 /**
  * Background extraction queue.
@@ -12,6 +13,7 @@ import { deleteReceipt, signReceiptUrl } from "./files.js";
  * the row with the extracted fields.
  *
  * Handles:
+ *  - PDF → PNG conversion + image resizing before the AI call
  *  - Rate limits (429): backs off using next_attempt_at
  *  - Other errors: increments extraction_attempts; flags needs_review
  *  - Restarts safely: pending rows are picked up again on boot
@@ -28,12 +30,13 @@ async function tick() {
   running = true;
 
   try {
-    // Pick one pending row that's due
     const { data: rows, error } = await serviceClient
       .from("transactions")
       .select("*")
       .eq("status", "pending")
-      .or(`next_attempt_at.is.null,next_attempt_at.lte.${new Date().toISOString()}`)
+      .or(
+        `next_attempt_at.is.null,next_attempt_at.lte.${new Date().toISOString()}`,
+      )
       .order("created_at", { ascending: true })
       .limit(1);
 
@@ -58,7 +61,7 @@ async function processOne(tx) {
   const log = logger.child({ txId: tx.id });
 
   try {
-    // 1. Download the receipt file from Storage
+    // 1. Download the original file from Storage
     const { data: fileData, error: dlErr } = await serviceClient.storage
       .from(config.SUPABASE_RECEIPTS_BUCKET)
       .download(tx.receipt_path);
@@ -67,21 +70,33 @@ async function processOne(tx) {
       throw new Error(`Download failed: ${dlErr?.message || "no data"}`);
     }
 
-    const buffer = Buffer.from(await fileData.arrayBuffer());
+    const originalBuffer = Buffer.from(await fileData.arrayBuffer());
 
-    // 2. Determine the mime from the storage path extension
+    // 2. Prepare the file for the AI.
+    //    - PDF  → convert first page to PNG, then resize
+    //    - Image → resize + compress to JPEG
+    //    The AI can only read images, never raw PDFs.
     const ext = tx.receipt_path.split(".").pop().toLowerCase();
-    const mimeByExt = {
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      png: "image/png",
-      webp: "image/webp",
-      pdf: "application/pdf",
-    };
-    const mimeType = mimeByExt[ext] || "image/jpeg";
 
-    // 3. Run extraction
-    const out = await extractReceipt({ buffer, mimeType });
+    let aiBuffer;
+    if (ext === "pdf") {
+      log.debug("Converting PDF to PNG");
+      const png = await pdfToPng(originalBuffer);
+      aiBuffer = await prepareImage(png);
+    } else {
+      aiBuffer = await prepareImage(originalBuffer);
+    }
+
+    log.debug(
+      { originalBytes: originalBuffer.length, aiBytes: aiBuffer.length },
+      "Prepared file for extraction",
+    );
+
+    // 3. Run extraction on the prepared image
+    const out = await extractReceipt({
+      buffer: aiBuffer,
+      mimeType: "image/jpeg",
+    });
 
     // 4. Update the transaction
     const updates = {
@@ -102,7 +117,6 @@ async function processOne(tx) {
     } else {
       updates.status = "needs_review";
       updates.review_reason = out.reason;
-      // Fill in whatever we did get, if anything
       if (out.data) {
         if (out.data.date) updates.occurred_on = out.data.date;
         if (out.data.time) updates.occurred_time = out.data.time;
@@ -153,9 +167,7 @@ async function processOne(tx) {
       .from("transactions")
       .update({
         status: maxed ? "needs_review" : "pending",
-        review_reason: maxed
-          ? "Could not read the receipt."
-          : null,
+        review_reason: maxed ? "Could not read the receipt." : null,
         extraction_attempts: attempts,
         next_attempt_at: maxed
           ? null
@@ -170,12 +182,8 @@ async function processOne(tx) {
 /* ---------- Start / stop ---------- */
 export function startQueue() {
   if (timer) return;
-  logger.info(
-    { intervalMs: POLL_INTERVAL_MS },
-    "Extraction queue started",
-  );
+  logger.info({ intervalMs: POLL_INTERVAL_MS }, "Extraction queue started");
   timer = setInterval(tick, POLL_INTERVAL_MS);
-  // Also tick once immediately
   tick();
 }
 

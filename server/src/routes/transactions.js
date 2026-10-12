@@ -1,6 +1,7 @@
 ﻿import express from "express";
 import { z } from "zod";
-import { deleteReceipt } from "../services/files.js";
+import { deleteReceipt, signReceiptUrl } from "../services/files.js";
+import logger from "../lib/logger.js";
 
 const router = express.Router();
 
@@ -148,6 +149,7 @@ router.get("/", async (req, res, next) => {
 
 /* =========================================================
    GET /api/transactions/:id
+   Returns the row plus a short-lived signed URL for its receipt.
    ========================================================= */
 router.get("/:id", async (req, res, next) => {
   try {
@@ -164,7 +166,20 @@ router.get("/:id", async (req, res, next) => {
       throw error;
     }
 
-    res.json(data);
+    // Attach a short-lived signed URL for the receipt, if any
+    let receipt_url = null;
+    if (data.receipt_path) {
+      try {
+        receipt_url = await signReceiptUrl(data.receipt_path, 3600);
+      } catch (signErr) {
+        logger.warn(
+          { err: signErr, path: data.receipt_path },
+          "Failed to sign receipt URL",
+        );
+      }
+    }
+
+    res.json({ ...data, receipt_url });
   } catch (err) {
     next(err);
   }

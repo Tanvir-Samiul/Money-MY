@@ -85,3 +85,37 @@ export const transactionsApi = {
     }),
   delete: (id) => apiFetch(`/api/transactions/${id}`, { method: "DELETE" }),
 };
+/* ---------- Receipts ---------- */
+export const receiptsApi = {
+  upload: async ({ file, categoryId, note, paymentSource, force }) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("categoryId", categoryId);
+    if (note) formData.append("note", note);
+    if (paymentSource) formData.append("paymentSource", paymentSource);
+    if (force) formData.append("force", "true");
+
+    // Don't set Content-Type — the browser sets it with the boundary
+    const token = await getAccessToken();
+    const res = await fetch("/api/transactions/receipt", {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    if (res.status === 204) return null;
+    const body = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const err = new Error(body?.error || `Upload failed (${res.status})`);
+      err.status = res.status;
+      err.body = body;
+      throw err;
+    }
+    return body;
+  },
+
+  retry: (id) => apiFetch(`/api/transactions/${id}/retry`, { method: "POST" }),
+  resolve: (id) =>
+    apiFetch(`/api/transactions/${id}/resolve`, { method: "POST" }),
+};

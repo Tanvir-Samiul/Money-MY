@@ -76,6 +76,19 @@ export default function Transactions() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterCategory, filterSource, search]);
 
+  // Auto-poll while any transaction is pending
+  useEffect(() => {
+    const hasPending = transactions.some((t) => t.status === "pending");
+    if (!hasPending) return;
+
+    const interval = setInterval(() => {
+      load();
+    }, 3000);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions]);
+
   const categoryMap = useMemo(() => {
     const m = new Map();
     for (const c of categories) m.set(c.id, c);
@@ -178,18 +191,34 @@ export default function Transactions() {
                         className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-sm"
                         style={{
                           background: cat ? cat.color + "22" : "#88888822",
-                          border: cat ? `1px solid ${cat.color}55` : "1px solid #88888855",
+                          border: cat
+                            ? `1px solid ${cat.color}55`
+                            : "1px solid #88888855",
                         }}
                       >
                         🏷️
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-text truncate">
-                          {tx.merchant || "Unknown merchant"}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-text truncate">
+                            {tx.merchant || "Unknown merchant"}
+                          </p>
+                          {tx.status === "pending" && (
+                            <span className="shrink-0 rounded-full bg-amber/15 text-amber text-[10px] font-bold px-2 py-0.5">
+                              Reading…
+                            </span>
+                          )}
+                          {tx.status === "needs_review" && (
+                            <span className="shrink-0 rounded-full bg-amber/15 text-amber text-[10px] font-bold px-2 py-0.5">
+                              Review
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-text-muted truncate">
                           {cat?.name || "—"} ·{" "}
-                          {SOURCE_LABELS[tx.payment_source] || tx.payment_source}
+                          {SOURCE_LABELS[tx.payment_source] ||
+                            tx.payment_source ||
+                            "—"}
                           {tx.note ? ` · ${tx.note}` : ""}
                         </p>
                       </div>

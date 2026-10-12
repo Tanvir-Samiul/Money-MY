@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { categoriesApi, transactionsApi } from "../lib/api.js";
+import { categoriesApi, transactionsApi, receiptsApi } from "../lib/api.js";
 import { rmToSen, senToRm, formatSen } from "../lib/money.js";
 
 const SOURCES = [
@@ -16,10 +16,13 @@ export default function TransactionDetail() {
 
   const [tx, setTx] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [receiptUrl, setReceiptUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [resolving, setResolving] = useState(false);
 
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -29,32 +32,47 @@ export default function TransactionDetail() {
   const [merchant, setMerchant] = useState("");
   const [note, setNote] = useState("");
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError("");
-      try {
-        const [txData, cats] = await Promise.all([
-          transactionsApi.get(id),
-          categoriesApi.list(),
-        ]);
-        setTx(txData);
-        setCategories(cats || []);
-        setAmount(String(senToRm(txData.amount_paid || 0)));
-        setCategoryId(txData.category_id);
-        setSource(txData.payment_source || "cash");
-        setDate(txData.occurred_on || "");
-        setTime(txData.occurred_time?.slice(0, 5) || "");
-        setMerchant(txData.merchant || "");
-        setNote(txData.note || "");
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const [txData, cats] = await Promise.all([
+        transactionsApi.get(id),
+        categoriesApi.list(),
+      ]);
+      setTx(txData);
+      setCategories(cats || []);
+      setReceiptUrl(txData.receipt_url || null);
+      setAmount(
+        txData.amount_paid != null ? String(senToRm(txData.amount_paid)) : "",
+      );
+      setCategoryId(txData.category_id || "");
+      setSource(txData.payment_source || "cash");
+      setDate(txData.occurred_on || "");
+      setTime(txData.occurred_time?.slice(0, 5) || "");
+      setMerchant(txData.merchant || "");
+      setNote(txData.note || "");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Auto-refresh while this transaction is pending
+  useEffect(() => {
+    if (!tx || tx.status !== "pending") return;
+    const interval = setInterval(() => {
+      load();
+    }, 3000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tx?.status, id]);
 
   async function handleSave(e) {
     e.preventDefault();
@@ -70,11 +88,37 @@ export default function TransactionDetail() {
         merchant: merchant.trim() || null,
         note: note.trim() || null,
       });
-      navigate("/transactions");
+      await load();
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRetry() {
+    setRetrying(true);
+    setError("");
+    try {
+      await receiptsApi.retry(id);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  async function handleResolve() {
+    setResolving(true);
+    setError("");
+    try {
+      await receiptsApi.resolve(id);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResolving(false);
     }
   }
 
@@ -119,13 +163,67 @@ export default function TransactionDetail() {
         ← Back
       </button>
 
+      {/* Receipt preview */}
+      {receiptUrl && (
+        <a
+          href={receiptUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block mb-4 rounded-2xl overflow-hidden border border-border bg-surface"
+        >
+          <img
+            src={receiptUrl}
+            alt="Receipt"
+            className="w-full max-h-80 object-contain bg-black/5"
+          />
+          <p className="text-[11px] text-text-muted text-center py-2">
+            Tap to view full size
+          </p>
+        </a>
+      )}
+
       <h1 className="text-2xl font-bold text-text mb-1">
         {tx.merchant || "Transaction"}
       </h1>
-      <p className="text-sm text-text-muted mb-6">
-        {formatSen(tx.amount_paid || 0)} ·{" "}
+      <p className="text-sm text-text-muted mb-4">
+        {tx.amount_paid != null ? formatSen(tx.amount_paid) : "Reading…"} ·{" "}
         {tx.entry_type === "manual" ? "Manual" : "Receipt"}
       </p>
+
+      {/* Status banners */}
+      {tx.status === "pending" && (
+        <div className="mb-4 rounded-xl border border-amber/40 bg-amber/10 text-amber text-sm px-3 py-2 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-amber animate-pulse" />
+          Reading receipt…
+        </div>
+      )}
+
+      {tx.status === "needs_review" && (
+        <div className="mb-4 rounded-xl border border-amber/40 bg-amber/10 p-3 space-y-3">
+          <p className="text-sm font-semibold text-text">⚠️ Needs review</p>
+          {tx.review_reason && (
+            <p className="text-xs text-text-muted">{tx.review_reason}</p>
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleRetry}
+              disabled={retrying}
+              className="flex-1 rounded-xl border border-border bg-surface text-text font-semibold py-2 text-xs disabled:opacity-50"
+            >
+              {retrying ? "Retrying…" : "Retry reading"}
+            </button>
+            <button
+              type="button"
+              onClick={handleResolve}
+              disabled={resolving}
+              className="flex-1 rounded-xl bg-primary text-on-primary font-semibold py-2 text-xs disabled:opacity-50"
+            >
+              {resolving ? "Marking…" : "Mark as reviewed"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSave} className="space-y-5">
         <div className="rounded-2xl border border-border bg-surface p-5">
@@ -138,9 +236,9 @@ export default function TransactionDetail() {
               type="number"
               step="0.01"
               min="0"
-              required
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
               className="flex-1 bg-transparent text-4xl font-bold text-text outline-none tabular-nums"
             />
           </div>
@@ -207,7 +305,6 @@ export default function TransactionDetail() {
             </label>
             <input
               type="date"
-              required
               value={date}
               onChange={(e) => setDate(e.target.value)}
               className="w-full rounded-xl border border-border bg-surface px-3 py-3 text-sm text-text outline-none focus:border-primary"
