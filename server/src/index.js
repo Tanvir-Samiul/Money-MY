@@ -13,6 +13,7 @@ import transactionsRouter from "./routes/transactions.js";
 import dashboardRouter from "./routes/dashboard.js";
 import exportRouter from "./routes/export.js";
 import receiptsRouter from "./routes/receipts.js";
+import { startQueue } from "./services/queue.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -134,6 +135,7 @@ const server = app.listen(config.PORT, () => {
   logger.info(
     `🚀 Server listening on http://localhost:${config.PORT} (env: ${config.NODE_ENV})`,
   );
+  startQueue();
 });
 
 /* ---------- Graceful shutdown ---------- */
