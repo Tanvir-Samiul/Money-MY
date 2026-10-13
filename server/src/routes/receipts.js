@@ -3,6 +3,7 @@ import multer from "multer";
 import { z } from "zod";
 import { hashBuffer, uploadReceipt, deleteReceipt } from "../services/files.js";
 import logger from "../lib/logger.js";
+import { validateSplitPlan } from "../services/splits.js";
 
 const router = express.Router();
 
@@ -29,6 +30,15 @@ const upload = multer({
 });
 
 /* ---------- Body schema ---------- */
+const splitPlanSchema = z
+  .object({
+    mode: z.enum(["equal", "custom"]),
+    people: z.number().int().min(2).max(100).optional(),
+    myShareSen: z.number().int().positive().optional(),
+  })
+  .optional()
+  .nullable();
+
 const bodySchema = z.object({
   categoryId: z.string().uuid("categoryId must be a UUID"),
   note: z.string().trim().max(500).optional().nullable(),
@@ -40,6 +50,22 @@ const bodySchema = z.object({
     .union([z.boolean(), z.string()])
     .optional()
     .transform((v) => v === true || v === "true"),
+  splitPlan: z
+    .union([z.string(), z.record(z.any())])
+    .optional()
+    .nullable()
+    .transform((v) => {
+      if (!v) return null;
+      if (typeof v === "string") {
+        try {
+          return JSON.parse(v);
+        } catch {
+          return null;
+        }
+      }
+      return v;
+    })
+    .pipe(splitPlanSchema),
 });
 
 /* =========================================================
@@ -47,7 +73,7 @@ const bodySchema = z.object({
    Accepts a multipart file + category, saves the file to storage,
    and creates a transaction with status='pending'.
 
-   Does NOT run extraction - the queue worker (Phase 3c) picks it up.
+   Does NOT run extraction — the queue worker (Phase 3c) picks it up.
    ========================================================= */
 router.post("/", upload.single("file"), async (req, res, next) => {
   try {
@@ -62,7 +88,7 @@ router.post("/", upload.single("file"), async (req, res, next) => {
       });
     }
 
-    const { categoryId, note, paymentSource, force } = parsed.data;
+    const { categoryId, note, paymentSource, force, splitPlan } = parsed.data;
 
     // Hash the file for duplicate detection
     const receiptHash = hashBuffer(req.file.buffer);
@@ -90,6 +116,21 @@ router.post("/", upload.single("file"), async (req, res, next) => {
       mimeType: req.file.mimetype,
     });
 
+    // Validate the split plan (amount is unknown yet — pass null)
+    const splitCheck = validateSplitPlan(splitPlan, null);
+    if (!splitCheck.ok) {
+      // Roll back the storage upload — no orphans
+      await deleteReceipt(receiptPath).catch(() => {});
+      return res.status(400).json({ error: splitCheck.error });
+    }
+
+    const splitMode = splitPlan?.mode || null;
+    const splitMeta = splitPlan
+      ? splitPlan.mode === "equal"
+        ? { people: splitPlan.people }
+        : { myShareSen: splitPlan.myShareSen }
+      : null;
+
     // Insert the transaction. If this fails, remove the orphaned file.
     try {
       const { data, error } = await req.supabase
@@ -103,6 +144,8 @@ router.post("/", upload.single("file"), async (req, res, next) => {
           receipt_path: receiptPath,
           receipt_hash: receiptHash,
           status: "pending",
+          split_mode: splitMode,
+          split_meta: splitMeta,
         })
         .select("*")
         .single();

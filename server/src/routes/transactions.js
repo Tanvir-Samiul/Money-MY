@@ -2,11 +2,21 @@
 import { z } from "zod";
 import { deleteReceipt, signReceiptUrl } from "../services/files.js";
 import logger from "../lib/logger.js";
+import { computeMyShare, validateSplitPlan } from "../services/splits.js";
 
 const router = express.Router();
 
 /* ---------- Validation schemas ---------- */
 const PAYMENT_SOURCES = ["touch_n_go", "maybank", "merchantrade", "cash"];
+
+const splitPlanSchema = z
+  .object({
+    mode: z.enum(["equal", "custom"]),
+    people: z.number().int().min(2).max(100).optional(),
+    myShareSen: z.number().int().positive().optional(),
+  })
+  .optional()
+  .nullable();
 
 const createManualSchema = z.object({
   amountSen: z.number().int().positive(),
@@ -20,6 +30,7 @@ const createManualSchema = z.object({
     .nullable(),
   merchant: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),
+  splitPlan: splitPlanSchema,
 });
 
 const updateSchema = z.object({
@@ -37,6 +48,7 @@ const updateSchema = z.object({
     .nullable(),
   merchant: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),
+  splitPlan: splitPlanSchema,
 });
 
 const listQuerySchema = z.object({
@@ -58,7 +70,6 @@ const listQuerySchema = z.object({
 
 /* =========================================================
    POST /api/transactions/manual
-   Create a manual entry (cash, or any transaction without a receipt).
    ========================================================= */
 router.post("/manual", async (req, res, next) => {
   try {
@@ -77,9 +88,34 @@ router.post("/manual", async (req, res, next) => {
       occurredTime,
       merchant,
       note,
+      splitPlan,
     } = parsed.data;
 
-    // For manual entries, my_share equals amount_paid (no split yet)
+    const splitCheck = validateSplitPlan(splitPlan, amountSen);
+    if (!splitCheck.ok) {
+      return res.status(400).json({ error: splitCheck.error });
+    }
+
+    let myShare = amountSen;
+    let splitMode = null;
+    let splitMeta = null;
+
+    if (splitPlan) {
+      const computed = computeMyShare(
+        amountSen,
+        splitPlan.mode,
+        splitPlan.mode === "equal"
+          ? { people: splitPlan.people }
+          : { myShareSen: splitPlan.myShareSen },
+      );
+      myShare = computed.myShareSen;
+      splitMode = splitPlan.mode;
+      splitMeta =
+        splitPlan.mode === "equal"
+          ? { people: splitPlan.people }
+          : { myShareSen: splitPlan.myShareSen };
+    }
+
     const { data, error } = await req.supabase
       .from("transactions")
       .insert({
@@ -88,12 +124,14 @@ router.post("/manual", async (req, res, next) => {
         occurred_on: occurredOn,
         occurred_time: occurredTime || null,
         amount_paid: amountSen,
-        my_share: amountSen,
+        my_share: myShare,
         merchant: merchant || null,
         category_id: categoryId,
         payment_source: paymentSource,
         note: note || null,
         status: "ok",
+        split_mode: splitMode,
+        split_meta: splitMeta,
       })
       .select("*")
       .single();
@@ -107,7 +145,6 @@ router.post("/manual", async (req, res, next) => {
 
 /* =========================================================
    GET /api/transactions
-   List transactions with filters + pagination.
    ========================================================= */
 router.get("/", async (req, res, next) => {
   try {
@@ -124,7 +161,7 @@ router.get("/", async (req, res, next) => {
     let query = req.supabase
       .from("transactions")
       .select(
-        "id, occurred_on, occurred_time, amount_paid, my_share, merchant, category_id, payment_source, note, status, entry_type, created_at",
+        "id, occurred_on, occurred_time, amount_paid, my_share, merchant, category_id, payment_source, note, status, entry_type, created_at, split_mode, split_meta",
         { count: "exact" },
       )
       .order("occurred_on", { ascending: false })
@@ -149,7 +186,6 @@ router.get("/", async (req, res, next) => {
 
 /* =========================================================
    GET /api/transactions/:id
-   Returns the row plus a short-lived signed URL for its receipt.
    ========================================================= */
 router.get("/:id", async (req, res, next) => {
   try {
@@ -166,7 +202,6 @@ router.get("/:id", async (req, res, next) => {
       throw error;
     }
 
-    // Attach a short-lived signed URL for the receipt, if any
     let receipt_url = null;
     if (data.receipt_path) {
       try {
@@ -200,7 +235,6 @@ router.patch("/:id", async (req, res, next) => {
     const updates = {};
     if (parsed.data.amountSen !== undefined) {
       updates.amount_paid = parsed.data.amountSen;
-      updates.my_share = parsed.data.amountSen; // No splits yet
     }
     if (parsed.data.categoryId !== undefined)
       updates.category_id = parsed.data.categoryId;
@@ -213,6 +247,67 @@ router.patch("/:id", async (req, res, next) => {
     if (parsed.data.merchant !== undefined)
       updates.merchant = parsed.data.merchant || null;
     if (parsed.data.note !== undefined) updates.note = parsed.data.note || null;
+
+    const wantsSplitChange =
+      parsed.data.splitPlan !== undefined ||
+      parsed.data.amountSen !== undefined;
+
+    if (wantsSplitChange) {
+      const { data: current, error: fetchErr } = await req.supabase
+        .from("transactions")
+        .select("amount_paid, split_mode, split_meta")
+        .eq("id", req.params.id)
+        .single();
+
+      if (fetchErr) {
+        if (fetchErr.code === "PGRST116") {
+          return res.status(404).json({ error: "Transaction not found." });
+        }
+        throw fetchErr;
+      }
+
+      const effectiveAmount =
+        parsed.data.amountSen !== undefined
+          ? parsed.data.amountSen
+          : current.amount_paid;
+
+      let nextMode;
+      let nextMeta;
+
+      if (parsed.data.splitPlan === undefined) {
+        nextMode = current.split_mode;
+        nextMeta = current.split_meta;
+      } else if (parsed.data.splitPlan === null) {
+        nextMode = null;
+        nextMeta = null;
+      } else {
+        nextMode = parsed.data.splitPlan.mode;
+        nextMeta =
+          parsed.data.splitPlan.mode === "equal"
+            ? { people: parsed.data.splitPlan.people }
+            : { myShareSen: parsed.data.splitPlan.myShareSen };
+      }
+
+      if (effectiveAmount != null) {
+        const check = validateSplitPlan(
+          nextMode ? { mode: nextMode, ...nextMeta } : null,
+          effectiveAmount,
+        );
+        if (!check.ok) {
+          return res.status(400).json({ error: check.error });
+        }
+      }
+
+      if (effectiveAmount != null && nextMode) {
+        const computed = computeMyShare(effectiveAmount, nextMode, nextMeta);
+        updates.my_share = computed.myShareSen;
+      } else if (effectiveAmount != null) {
+        updates.my_share = effectiveAmount;
+      }
+
+      updates.split_mode = nextMode;
+      updates.split_meta = nextMeta;
+    }
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: "No fields to update." });
@@ -240,7 +335,6 @@ router.patch("/:id", async (req, res, next) => {
 
 /* =========================================================
    POST /api/transactions/:id/retry
-   Reset a needs_review or failed transaction back to pending.
    ========================================================= */
 router.post("/:id/retry", async (req, res, next) => {
   try {
@@ -271,7 +365,6 @@ router.post("/:id/retry", async (req, res, next) => {
 
 /* =========================================================
    POST /api/transactions/:id/resolve
-   Mark a needs_review transaction as ok (user confirmed).
    ========================================================= */
 router.post("/:id/resolve", async (req, res, next) => {
   try {
@@ -300,7 +393,6 @@ router.post("/:id/resolve", async (req, res, next) => {
    ========================================================= */
 router.delete("/:id", async (req, res, next) => {
   try {
-    // Fetch first so we know the storage path
     const { data: tx, error: fetchErr } = await req.supabase
       .from("transactions")
       .select("receipt_path")
@@ -319,7 +411,6 @@ router.delete("/:id", async (req, res, next) => {
 
     if (error) throw error;
 
-    // Best-effort: remove the receipt file too
     if (tx?.receipt_path) {
       await deleteReceipt(tx.receipt_path).catch(() => {});
     }

@@ -4,6 +4,7 @@ import { serviceClient } from "./storage.js";
 import { extractReceipt } from "./extraction/index.js";
 import { prepareImage } from "./images.js";
 import { pdfToPng } from "./pdf.js";
+import { computeMyShare } from "./splits.js";
 
 /**
  * Background extraction queue.
@@ -17,6 +18,7 @@ import { pdfToPng } from "./pdf.js";
  *  - Rate limits (429): backs off using next_attempt_at
  *  - Other errors: increments extraction_attempts; flags needs_review
  *  - Restarts safely: pending rows are picked up again on boot
+ *  - Split plans: recomputes my_share after extraction
  */
 
 const POLL_INTERVAL_MS = 5000;
@@ -75,7 +77,6 @@ async function processOne(tx) {
     // 2. Prepare the file for the AI.
     //    - PDF  → convert first page to PNG, then resize
     //    - Image → resize + compress to JPEG
-    //    The AI can only read images, never raw PDFs.
     const ext = tx.receipt_path.split(".").pop().toLowerCase();
 
     let aiBuffer;
@@ -92,7 +93,7 @@ async function processOne(tx) {
       "Prepared file for extraction",
     );
 
-    // 3. Run extraction on the prepared image
+    // 3. Run extraction
     const out = await extractReceipt({
       buffer: aiBuffer,
       mimeType: "image/jpeg",
@@ -111,9 +112,12 @@ async function processOne(tx) {
       updates.occurred_on = out.data.date;
       updates.occurred_time = out.data.time;
       updates.amount_paid = out.amountSen;
-      updates.my_share = out.amountSen;
       updates.merchant = out.data.merchant;
       updates.payment_source = out.data.payment_source;
+
+      // Recompute my_share if a split plan was set at upload time
+      const split = computeMyShare(out.amountSen, tx.split_mode, tx.split_meta);
+      updates.my_share = split ? split.myShareSen : out.amountSen;
     } else {
       updates.status = "needs_review";
       updates.review_reason = out.reason;
@@ -122,7 +126,12 @@ async function processOne(tx) {
         if (out.data.time) updates.occurred_time = out.data.time;
         if (out.amountSen) {
           updates.amount_paid = out.amountSen;
-          updates.my_share = out.amountSen;
+          const split = computeMyShare(
+            out.amountSen,
+            tx.split_mode,
+            tx.split_meta,
+          );
+          updates.my_share = split ? split.myShareSen : out.amountSen;
         }
         if (out.data.merchant) updates.merchant = out.data.merchant;
         if (out.data.payment_source && out.data.payment_source !== "unknown") {
