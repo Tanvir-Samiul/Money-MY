@@ -2,8 +2,6 @@
 
 A calm, mobile-first personal expense tracker for Malaysian Ringgit spending.
 
-**Status:** Phase 0.1 — Repo scaffold complete.
-
 ## Planned stack (all free)
 
 - Frontend: React 18 + Vite + Tailwind CSS + Recharts + PWA
