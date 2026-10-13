@@ -18,7 +18,7 @@ RUN npm run build
 
 
 # ---------- Stage 2: production server ----------
-FROM node:22-alpine AS client-build
+FROM node:22-alpine AS server
 
 # Poppler for PDF → PNG conversion
 RUN apk add --no-cache poppler-utils
