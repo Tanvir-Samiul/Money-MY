@@ -14,10 +14,12 @@ export default function AppShell() {
     <div className="min-h-screen bg-bg text-text">
       <div className="mx-auto w-full max-w-[480px] min-h-screen flex flex-col">
         <header className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h1 className="text-sm font-bold">Money MY</h1>
+          <h1 className="text-xl font-bold text-primary tracking-tight">
+            Money MY
+          </h1>
           <button
             onClick={handleLogout}
-            className="text-xs text-text-muted hover:text-primary"
+            className="text-sm text-text-muted hover:text-primary"
           >
             Sign out
           </button>

@@ -24,6 +24,43 @@ export function hashBuffer(buffer) {
 }
 
 /**
+ * Upload a buffer to Supabase Storage with retry on transient failures.
+ *
+ * Supabase's client sometimes returns "fetch failed" when the connection
+ * to their API blips — common on shared free tier. A single retry usually
+ * fixes it. We only retry on 5xx or missing-status errors; real 4xx errors
+ * (auth, quota, bad request) surface immediately.
+ */
+async function uploadWithRetry(bucket, path, buffer, opts, maxRetries = 2) {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const { error } = await serviceClient.storage
+      .from(bucket)
+      .upload(path, buffer, opts);
+
+    if (!error) return;
+
+    lastError = error;
+
+    // Don't retry on real client errors (4xx)
+    const status = error.statusCode ?? error.status;
+    if (typeof status === "number" && status >= 400 && status < 500) {
+      throw new Error(`Storage upload failed: ${error.message}`);
+    }
+
+    if (attempt === maxRetries) break;
+
+    // Backoff: 1s, 2s
+    const waitMs = 1000 * (attempt + 1);
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
+
+  throw new Error(
+    `Storage upload failed after ${maxRetries + 1} attempts: ${lastError.message}`,
+  );
+}
+
+/**
  * Upload a receipt to Supabase Storage.
  *
  * @param {Object} args
@@ -41,16 +78,10 @@ export async function uploadReceipt({ userId, buffer, mimeType }) {
   const fileId = crypto.randomUUID();
   const storagePath = `${userId}/${fileId}.${ext}`;
 
-  const { error } = await serviceClient.storage
-    .from(config.SUPABASE_RECEIPTS_BUCKET)
-    .upload(storagePath, buffer, {
-      contentType: mimeType,
-      upsert: false,
-    });
-
-  if (error) {
-    throw new Error(`Storage upload failed: ${error.message}`);
-  }
+  await uploadWithRetry(config.SUPABASE_RECEIPTS_BUCKET, storagePath, buffer, {
+    contentType: mimeType,
+    upsert: false,
+  });
 
   return storagePath;
 }

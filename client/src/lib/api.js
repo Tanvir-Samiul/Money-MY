@@ -1,6 +1,26 @@
 ﻿import { getAccessToken } from "./auth.js";
 
 /**
+ * Retry a fetch on network errors only.
+ * 4xx/5xx responses are NOT retried — those come back as Response objects.
+ * Only thrown errors (DNS failure, connection reset, timeout) trigger retry.
+ */
+async function fetchWithRetry(url, options, maxRetries = 2) {
+  let lastErr;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fetch(url, options);
+    } catch (err) {
+      lastErr = err;
+      if (attempt === maxRetries) break;
+      // Exponential backoff: 1s, 2s
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * Fetch wrapper that automatically adds the JWT.
  * Throws on non-2xx responses with the server's error message.
  */
@@ -106,7 +126,7 @@ export const receiptsApi = {
 
     // Don't set Content-Type — the browser sets it with the boundary
     const token = await getAccessToken();
-    const res = await fetch("/api/transactions/receipt", {
+    const res = await fetchWithRetry("/api/transactions/receipt", {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
