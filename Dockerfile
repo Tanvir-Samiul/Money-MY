@@ -2,6 +2,12 @@
 FROM node:20-alpine AS client-build
 WORKDIR /app/client
 
+# Build-time env vars for Vite — Vite bakes these into the JS bundle
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
 # Copy manifests first for better caching
 COPY client/package.json client/package-lock.json ./
 RUN npm ci
@@ -27,7 +33,7 @@ RUN npm ci --omit=dev
 COPY server/ ./
 
 # Copy the built client into where Express will look for it
-# (matches the path in server/src/index.js: ../../client/dist)
+# (matches server/src/index.js: ../../client/dist)
 WORKDIR /app
 COPY --from=client-build /app/client/dist ./client/dist
 
