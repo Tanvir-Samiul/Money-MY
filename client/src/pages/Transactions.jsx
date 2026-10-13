@@ -47,6 +47,9 @@ export default function Transactions() {
 
   const [filterCategory, setFilterCategory] = useState("");
   const [filterSource, setFilterSource] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo, setFilterTo] = useState("");
   const [search, setSearch] = useState("");
 
   async function load() {
@@ -56,6 +59,9 @@ export default function Transactions() {
       const params = {};
       if (filterCategory) params.category = filterCategory;
       if (filterSource) params.source = filterSource;
+      if (filterStatus) params.status = filterStatus;
+      if (filterFrom) params.from = filterFrom;
+      if (filterTo) params.to = filterTo;
       if (search) params.q = search;
 
       const [txRes, catRes] = await Promise.all([
@@ -74,7 +80,14 @@ export default function Transactions() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCategory, filterSource, search]);
+  }, [
+    filterCategory,
+    filterSource,
+    filterStatus,
+    filterFrom,
+    filterTo,
+    search,
+  ]);
 
   // Auto-poll while any transaction is pending
   useEffect(() => {
@@ -150,6 +163,47 @@ export default function Transactions() {
               </option>
             ))}
           </select>
+
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="rounded-xl border border-border bg-surface px-3 py-2 text-xs text-text outline-none"
+          >
+            <option value="">All statuses</option>
+            <option value="ok">OK</option>
+            <option value="needs_review">Review</option>
+            <option value="pending">Reading</option>
+          </select>
+        </div>
+
+        <div className="flex gap-2 items-center">
+          <input
+            type="date"
+            value={filterFrom}
+            onChange={(e) => setFilterFrom(e.target.value)}
+            className="flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-xs text-text outline-none focus:border-primary"
+          />
+          <span className="text-[10px] uppercase tracking-widest text-text-muted font-bold">
+            to
+          </span>
+          <input
+            type="date"
+            value={filterTo}
+            onChange={(e) => setFilterTo(e.target.value)}
+            className="flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-xs text-text outline-none focus:border-primary"
+          />
+          {(filterFrom || filterTo) && (
+            <button
+              type="button"
+              onClick={() => {
+                setFilterFrom("");
+                setFilterTo("");
+              }}
+              className="shrink-0 rounded-lg border border-border text-text-muted px-2 py-1.5 text-[10px] font-semibold"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
@@ -181,7 +235,6 @@ export default function Transactions() {
               <div className="space-y-2">
                 {rows.map((tx) => {
                   const cat = categoryMap.get(tx.category_id);
-                  const isSplit = tx.split_mode != null;
                   const splitLabel =
                     tx.split_mode === "equal" && tx.split_meta?.people
                       ? `s:${tx.split_meta.people}`
