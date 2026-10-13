@@ -24,9 +24,49 @@ self.addEventListener("fetch", (event) => {
 async function handleShareTarget(request) {
   try {
     const formData = await request.formData();
-    const files = formData.getAll("receipt").filter((f) => f instanceof File);
+
+    // -------- DEBUG: log everything the SW receives --------
+    const debugEntries = [];
+    for (const [key, value] of formData.entries()) {
+      debugEntries.push({
+        key,
+        typeof: typeof value,
+        isFile: value instanceof File,
+        constructor: value?.constructor?.name,
+        size: value?.size,
+        mimeType: value?.type,
+        name: value?.name,
+      });
+    }
+    console.log("[sw] share-target formData keys:", debugEntries);
+
+    // -------- Extract file(s) --------
+    // Try the declared field name first
+    let files = formData.getAll("receipt");
+
+    // If empty, walk the form and pick up any File/Blob-like object
+    if (files.length === 0) {
+      for (const [, value] of formData.entries()) {
+        if (
+          value &&
+          typeof value === "object" &&
+          "size" in value &&
+          "type" in value
+        ) {
+          files.push(value);
+        }
+      }
+    }
+
+    // Filter out anything that doesn't look like a file
+    files = files.filter(
+      (f) => f && typeof f === "object" && typeof f.size === "number",
+    );
+
+    console.log("[sw] files after extraction:", files.length);
 
     if (files.length === 0) {
+      // No file was shared — bounce to the upload page
       return Response.redirect("/add/upload", 303);
     }
 
@@ -47,6 +87,7 @@ async function handleShareTarget(request) {
       await set(DB_KEY_PREFIX + id + "-text", String(text));
     }
 
+    console.log("[sw] stored file with id:", id);
     return Response.redirect(`/share?id=${id}`, 303);
   } catch (err) {
     console.error("[sw] share-target failed:", err);
