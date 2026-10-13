@@ -4,7 +4,7 @@ const items = [
   { to: "/dashboard", label: "Dashboard", icon: "🏠" },
   { to: "/transactions", label: "Transactions", icon: "📋" },
   { to: "/add", label: "Add", icon: "➕", primary: true },
-  { to: "/friends", label: "Who owes me", icon: "👥" },
+  { to: "/categories", label: "Categories", icon: "🏷️" },
   { to: "/more", label: "More", icon: "⋯" },
 ];
 

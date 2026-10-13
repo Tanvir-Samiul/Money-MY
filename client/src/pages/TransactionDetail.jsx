@@ -2,6 +2,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { categoriesApi, transactionsApi, receiptsApi } from "../lib/api.js";
 import { rmToSen, senToRm, formatSen } from "../lib/money.js";
+import SplitEditor from "../components/SplitEditor.jsx";
 
 const SOURCES = [
   { value: "cash", label: "Cash" },
@@ -31,6 +32,7 @@ export default function TransactionDetail() {
   const [time, setTime] = useState("");
   const [merchant, setMerchant] = useState("");
   const [note, setNote] = useState("");
+  const [splitPlan, setSplitPlan] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -52,6 +54,21 @@ export default function TransactionDetail() {
       setTime(txData.occurred_time?.slice(0, 5) || "");
       setMerchant(txData.merchant || "");
       setNote(txData.note || "");
+
+      // Rebuild the split plan from what's stored
+      if (txData.split_mode === "equal" && txData.split_meta?.people) {
+        setSplitPlan({ mode: "equal", people: txData.split_meta.people });
+      } else if (
+        txData.split_mode === "custom" &&
+        txData.split_meta?.myShareSen
+      ) {
+        setSplitPlan({
+          mode: "custom",
+          myShareSen: txData.split_meta.myShareSen,
+        });
+      } else {
+        setSplitPlan(null);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -87,8 +104,9 @@ export default function TransactionDetail() {
         occurredTime: time || null,
         merchant: merchant.trim() || null,
         note: note.trim() || null,
+        splitPlan,
       });
-      await load();
+      navigate("/transactions");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -348,6 +366,39 @@ export default function TransactionDetail() {
             className="w-full resize-none rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text outline-none focus:border-primary"
           />
         </div>
+
+        {/* Split editor */}
+        <SplitEditor
+          amountSen={tx.amount_paid ?? null}
+          value={splitPlan}
+          onChange={setSplitPlan}
+        />
+
+        {/* My share summary */}
+        {splitPlan && tx.amount_paid != null && (
+          <div className="rounded-2xl border border-primary/30 bg-primary-soft p-4 space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-text-muted">You paid</span>
+              <span className="text-text tabular-nums">
+                {formatSen(tx.amount_paid)}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-text-muted">Your share</span>
+              <span className="font-semibold text-text tabular-nums">
+                {formatSen(
+                  splitPlan.mode === "equal" && splitPlan.people
+                    ? tx.amount_paid -
+                        Math.floor(tx.amount_paid / splitPlan.people) *
+                          (splitPlan.people - 1)
+                    : splitPlan.mode === "custom"
+                      ? splitPlan.myShareSen
+                      : tx.amount_paid,
+                )}
+              </span>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="rounded-xl border border-red/30 bg-red/10 text-red text-sm px-3 py-2">

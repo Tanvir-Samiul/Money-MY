@@ -8,7 +8,7 @@ import Transactions from "./pages/Transactions.jsx";
 import Add from "./pages/Add.jsx";
 import AddManual from "./pages/AddManual.jsx";
 import ShareReceipt from "./pages/ShareReceipt.jsx";
-import Friends from "./pages/Friends.jsx";
+
 import More from "./pages/More.jsx";
 import Categories from "./pages/Categories.jsx";
 import TransactionDetail from "./pages/TransactionDetail.jsx";
@@ -33,7 +33,7 @@ export default function App() {
         <Route path="add" element={<Add />} />
         <Route path="add/manual" element={<AddManual />} />
         <Route path="add/upload" element={<ShareReceipt />} />
-        <Route path="friends" element={<Friends />} />
+
         <Route path="more" element={<More />} />
         <Route path="categories" element={<Categories />} />
         <Route path="transactions/:id" element={<TransactionDetail />} />

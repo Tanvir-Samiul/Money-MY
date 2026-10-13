@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { categoriesApi, receiptsApi } from "../lib/api.js";
+import SplitEditor from "../components/SplitEditor.jsx";
 
 const SOURCES = [
   { value: "", label: "Auto detect" },
@@ -23,6 +24,7 @@ export default function ShareReceipt() {
   const [categoryId, setCategoryId] = useState("");
   const [source, setSource] = useState("");
   const [note, setNote] = useState("");
+  const [splitPlan, setSplitPlan] = useState(null);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -75,6 +77,7 @@ export default function ShareReceipt() {
         categoryId,
         note: note.trim() || undefined,
         paymentSource: source || undefined,
+        splitPlan: splitPlan || undefined,
       });
       navigate("/transactions", { replace: true });
     } catch (err) {
@@ -98,6 +101,7 @@ export default function ShareReceipt() {
         categoryId,
         note: note.trim() || undefined,
         paymentSource: source || undefined,
+        splitPlan: splitPlan || undefined,
         force: true,
       });
       navigate("/transactions", { replace: true });
@@ -265,6 +269,13 @@ export default function ShareReceipt() {
             className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text outline-none focus:border-primary"
           />
         </div>
+
+        {/* Split */}
+        <SplitEditor
+          amountSen={null}
+          value={splitPlan}
+          onChange={setSplitPlan}
+        />
 
         {/* Duplicate warning */}
         {duplicate && (

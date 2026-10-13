@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { categoriesApi, transactionsApi } from "../lib/api.js";
 import { rmToSen } from "../lib/money.js";
+import SplitEditor from "../components/SplitEditor.jsx";
 
 const SOURCES = [
   { value: "cash", label: "Cash", icon: "💵" },
@@ -39,6 +40,7 @@ export default function AddManual() {
   const [time, setTime] = useState(nowLocalHHMM());
   const [merchant, setMerchant] = useState("");
   const [note, setNote] = useState("");
+  const [splitPlan, setSplitPlan] = useState(null);
 
   useEffect(() => {
     categoriesApi
@@ -73,6 +75,7 @@ export default function AddManual() {
         occurredTime: time || null,
         merchant: merchant.trim() || null,
         note: note.trim() || null,
+        splitPlan: splitPlan || undefined,
       });
       navigate("/transactions", { replace: true });
     } catch (err) {
@@ -106,6 +109,10 @@ export default function AddManual() {
       </div>
     );
   }
+
+  // Amount in sen, if the user has typed a valid number (for SplitEditor's preview)
+  const amountSenForSplit =
+    amount && parseFloat(amount) > 0 ? rmToSen(amount) : null;
 
   return (
     <div className="p-4 pb-24">
@@ -246,6 +253,13 @@ export default function AddManual() {
             className="w-full resize-none rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text outline-none focus:border-primary"
           />
         </div>
+
+        {/* Split editor */}
+        <SplitEditor
+          amountSen={amountSenForSplit}
+          value={splitPlan}
+          onChange={setSplitPlan}
+        />
 
         {error && (
           <div className="rounded-xl border border-red/30 bg-red/10 text-red text-sm px-3 py-2">

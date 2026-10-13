@@ -85,15 +85,24 @@ export const transactionsApi = {
     }),
   delete: (id) => apiFetch(`/api/transactions/${id}`, { method: "DELETE" }),
 };
+
 /* ---------- Receipts ---------- */
 export const receiptsApi = {
-  upload: async ({ file, categoryId, note, paymentSource, force }) => {
+  upload: async ({
+    file,
+    categoryId,
+    note,
+    paymentSource,
+    force,
+    splitPlan,
+  }) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("categoryId", categoryId);
     if (note) formData.append("note", note);
     if (paymentSource) formData.append("paymentSource", paymentSource);
     if (force) formData.append("force", "true");
+    if (splitPlan) formData.append("splitPlan", JSON.stringify(splitPlan));
 
     // Don't set Content-Type — the browser sets it with the boundary
     const token = await getAccessToken();

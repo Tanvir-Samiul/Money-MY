@@ -181,6 +181,18 @@ export default function Transactions() {
               <div className="space-y-2">
                 {rows.map((tx) => {
                   const cat = categoryMap.get(tx.category_id);
+                  const isSplit = tx.split_mode != null;
+                  const splitLabel =
+                    tx.split_mode === "equal" && tx.split_meta?.people
+                      ? `s:${tx.split_meta.people}`
+                      : tx.split_mode === "custom"
+                        ? "s:c"
+                        : null;
+                  const showPaid =
+                    tx.amount_paid != null &&
+                    tx.my_share != null &&
+                    tx.amount_paid !== tx.my_share;
+
                   return (
                     <button
                       key={tx.id}
@@ -219,6 +231,10 @@ export default function Transactions() {
                           {SOURCE_LABELS[tx.payment_source] ||
                             tx.payment_source ||
                             "—"}
+                          {splitLabel ? ` · ${splitLabel}` : ""}
+                          {showPaid
+                            ? ` p:${(tx.amount_paid / 100).toFixed(2)}`
+                            : ""}
                           {tx.note ? ` · ${tx.note}` : ""}
                         </p>
                       </div>
@@ -226,11 +242,6 @@ export default function Transactions() {
                         <p className="font-semibold text-text tabular-nums">
                           {formatSen(tx.my_share ?? 0)}
                         </p>
-                        {tx.amount_paid !== tx.my_share && (
-                          <p className="text-[10px] text-text-muted tabular-nums">
-                            paid {formatSen(tx.amount_paid ?? 0)}
-                          </p>
-                        )}
                       </div>
                     </button>
                   );
