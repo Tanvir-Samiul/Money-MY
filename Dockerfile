@@ -1,5 +1,5 @@
 ﻿# ---------- Stage 1: build the client ----------
-FROM node:20-alpine AS client-build
+FROM node:22-alpine AS client-build
 WORKDIR /app/client
 
 # Build-time env vars for Vite — Vite bakes these into the JS bundle
@@ -18,7 +18,7 @@ RUN npm run build
 
 
 # ---------- Stage 2: production server ----------
-FROM node:20-alpine AS server
+FROM node:22-alpine AS client-build
 
 # Poppler for PDF → PNG conversion
 RUN apk add --no-cache poppler-utils
