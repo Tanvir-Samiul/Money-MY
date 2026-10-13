@@ -31,8 +31,23 @@ function formatMonth(ym) {
   });
 }
 
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+function firstOfMonthIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
 export default function Dashboard() {
+  const [mode, setMode] = useState("month"); // "month" | "custom"
   const [month, setMonth] = useState(currentMonth());
+  const [from, setFrom] = useState(firstOfMonthIso());
+  const [to, setTo] = useState(todayIso());
   const [source, setSource] = useState("");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +59,13 @@ export default function Dashboard() {
       setError("");
       try {
         const token = await getAccessToken();
-        const params = new URLSearchParams({ month });
+        const params = new URLSearchParams();
+        if (mode === "month") {
+          params.set("month", month);
+        } else {
+          params.set("from", from);
+          params.set("to", to);
+        }
         if (source) params.set("source", source);
 
         const res = await fetch(`/api/dashboard?${params}`, {
@@ -63,38 +84,86 @@ export default function Dashboard() {
       }
     }
     load();
-  }, [month, source]);
+  }, [mode, month, from, to, source]);
 
   const isCurrentMonth = month === currentMonth();
   const total = data?.total ?? 0;
   const diff = data?.diff ?? 0;
+  const isCustomRange = mode === "custom";
 
   return (
     <div className="p-4 pb-24">
-      {/* Month switcher */}
-      <div className="flex items-center justify-between mb-4">
+      {/* Mode toggle */}
+      <div className="flex gap-2 mb-3">
         <button
-          onClick={() => setMonth(shiftMonth(month, -1))}
-          className="w-9 h-9 rounded-xl border border-border bg-surface flex items-center justify-center text-text"
+          onClick={() => setMode("month")}
+          className={`flex-1 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+            mode === "month"
+              ? "border-primary bg-primary-soft text-text"
+              : "border-border bg-surface text-text-muted"
+          }`}
         >
-          ←
+          Month
         </button>
-        <div className="text-center">
-          <p className="text-[10px] uppercase tracking-widest text-text-muted font-bold">
-            {isCurrentMonth ? "This month" : "Month"}
-          </p>
-          <p className="text-sm font-semibold text-text">
-            {formatMonth(month)}
-          </p>
-        </div>
         <button
-          onClick={() => setMonth(shiftMonth(month, 1))}
-          disabled={isCurrentMonth}
-          className="w-9 h-9 rounded-xl border border-border bg-surface flex items-center justify-center text-text disabled:opacity-30"
+          onClick={() => setMode("custom")}
+          className={`flex-1 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+            mode === "custom"
+              ? "border-primary bg-primary-soft text-text"
+              : "border-border bg-surface text-text-muted"
+          }`}
         >
-          →
+          Custom range
         </button>
       </div>
+
+      {/* Month switcher (month mode) */}
+      {mode === "month" && (
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => setMonth(shiftMonth(month, -1))}
+            className="w-9 h-9 rounded-xl border border-border bg-surface flex items-center justify-center text-text"
+          >
+            ←
+          </button>
+          <div className="text-center">
+            <p className="text-[10px] uppercase tracking-widest text-text-muted font-bold">
+              {isCurrentMonth ? "This month" : "Month"}
+            </p>
+            <p className="text-sm font-semibold text-text">
+              {formatMonth(month)}
+            </p>
+          </div>
+          <button
+            onClick={() => setMonth(shiftMonth(month, 1))}
+            disabled={isCurrentMonth}
+            className="w-9 h-9 rounded-xl border border-border bg-surface flex items-center justify-center text-text disabled:opacity-30"
+          >
+            →
+          </button>
+        </div>
+      )}
+
+      {/* Custom range picker (custom mode) */}
+      {mode === "custom" && (
+        <div className="flex gap-2 items-center mb-4">
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-xs text-text outline-none focus:border-primary"
+          />
+          <span className="text-[10px] uppercase tracking-widest text-text-muted font-bold">
+            to
+          </span>
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-xs text-text outline-none focus:border-primary"
+          />
+        </div>
+      )}
 
       {/* Source filter chips */}
       <div className="flex gap-2 overflow-x-auto mb-4">
@@ -130,7 +199,7 @@ export default function Dashboard() {
         <p className="mt-2 text-4xl font-extrabold text-text tabular-nums">
           {loading ? "RM —" : formatSen(total)}
         </p>
-        {!loading && data && (
+        {!loading && data && !isCustomRange && (
           <p className="text-xs text-text-muted mt-2">
             {data.previousTotal === 0
               ? "First month with spending"
@@ -139,6 +208,11 @@ export default function Dashboard() {
                 : diff < 0
                   ? `${formatSen(Math.abs(diff))} less than last month`
                   : `${formatSen(diff)} more than last month`}
+          </p>
+        )}
+        {!loading && data && isCustomRange && (
+          <p className="text-xs text-text-muted mt-2">
+            {data.from} → {data.to}
           </p>
         )}
       </div>
@@ -238,7 +312,7 @@ export default function Dashboard() {
       {!loading && data && data.transactionCount === 0 && (
         <div className="rounded-2xl border border-dashed border-border bg-surface p-8 text-center">
           <p className="text-text-muted text-sm mb-4">
-            No spending recorded for this month.
+            No spending recorded for this range.
           </p>
           <Link
             to="/add"

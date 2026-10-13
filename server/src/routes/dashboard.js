@@ -4,23 +4,56 @@ import { monthRangeInAppTz, previousMonth, todayInAppTz } from "../lib/tz.js";
 const router = express.Router();
 
 /* =========================================================
-   GET /api/dashboard?month=YYYY-MM&source=cash
-   Returns aggregated spending data for the given month.
+   GET /api/dashboard
+   Query params:
+     month=YYYY-MM   → whole month, compares against previous month
+     from&to         → explicit range, no comparison
+     source=...      → optional payment source filter
+
+   Returns aggregated spending data (using my_share, not amount_paid).
    ========================================================= */
 router.get("/", async (req, res, next) => {
   try {
-    const currentMonth = req.query.month || todayInAppTz().slice(0, 7);
     const source = req.query.source || null;
 
-    const { from, to } = monthRangeInAppTz(currentMonth);
-    const prevMonth = previousMonth(currentMonth);
-    const { from: prevFrom, to: prevTo } = monthRangeInAppTz(prevMonth);
+    let currentMonth;
+    let from;
+    let to;
+    let prevFrom;
+    let prevTo;
+
+    if (req.query.from && req.query.to) {
+      // Custom range mode
+      from = req.query.from;
+      to = req.query.to;
+      currentMonth = null;
+      prevFrom = null;
+      prevTo = null;
+    } else {
+      // Month mode
+      currentMonth = req.query.month || todayInAppTz().slice(0, 7);
+      const range = monthRangeInAppTz(currentMonth);
+      from = range.from;
+      to = range.to;
+      const prevMonth = previousMonth(currentMonth);
+      const prevRange = monthRangeInAppTz(prevMonth);
+      prevFrom = prevRange.from;
+      prevTo = prevRange.to;
+    }
+
+    // Validate dates look like YYYY-MM-DD
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    if (!DATE_RE.test(from) || !DATE_RE.test(to)) {
+      return res.status(400).json({ error: "Invalid date range" });
+    }
 
     // Base query builder — only counts 'ok' and 'needs_review' (skips pending)
     function baseQuery(f, t, src) {
       let q = req.supabase
         .from("transactions")
-        .select("id, my_share, amount_paid, merchant, category_id, payment_source, status")
+        .select(
+          "id, my_share, amount_paid, merchant, category_id, payment_source, status",
+        )
         .gte("occurred_on", f)
         .lte("occurred_on", t)
         .in("status", ["ok", "needs_review"]);
@@ -30,7 +63,9 @@ router.get("/", async (req, res, next) => {
 
     const [currentRes, prevRes, catsRes, pendingRes] = await Promise.all([
       baseQuery(from, to, source),
-      baseQuery(prevFrom, prevTo, source),
+      prevFrom && prevTo
+        ? baseQuery(prevFrom, prevTo, source)
+        : Promise.resolve({ data: [] }),
       req.supabase.from("categories").select("id, name, color"),
       req.supabase
         .from("transactions")
@@ -105,6 +140,7 @@ router.get("/", async (req, res, next) => {
       month: currentMonth,
       from,
       to,
+      isCustomRange: !currentMonth,
       total: totalCurrent,
       previousTotal: totalPrev,
       diff,
